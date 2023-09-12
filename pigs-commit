@@ -1,0 +1,104 @@
+#!/bin/dash
+
+if [ ! -d ".pig" ]
+then 
+    echo "pigs-commit: error: pigs repository directory .pig not found" >&2
+    exit 1
+fi 
+
+if [ $# -lt 2 ]
+then
+    echo "usage: pigs-commit [-a] -m commit-message" >&2
+    exit 1
+fi
+
+if ! test -d ".pig/index"
+then
+    echo "nothing to commit"
+    exit 0
+fi
+
+message=$2
+if [ $# -eq 3 ]
+then
+    message=$3
+fi
+
+message=$2
+temp_file=$(mktemp)
+
+cd .pig || exit 1
+
+# create snapshot directory
+backup_directory='.snapshot.'
+i=0
+while test -d "$backup_directory$i" 
+do 
+    i=$((i + 1))
+done 
+mkdir "$backup_directory$i" 
+
+cd index || exit 1
+
+# commit -a -m functionality
+if [ $# -eq 3 ]
+then
+    for file in *
+    do 
+        cd ../.. || exit 1
+        cp "$file" .pig/index
+        cd .pig/index || exit 1
+    done 
+fi
+
+changed=false
+[ "$(ls)" ] && for file in *
+do 
+    #check if file was rmed
+    check=$(echo "$file" | cut -d'-' -f2)
+    if [ "$check" = "deleted" ]
+    then 
+        rm "$file"
+        changed=true
+        continue
+    fi 
+    # check if file has been changed
+    if [ $i -gt 0 ]
+    then 
+        j=$((i - 1))
+        if [ -f "../$backup_directory$j/$file" ]
+        then 
+            if ! diff "$file" "../$backup_directory$j/$file" >/dev/null
+            then 
+                changed=true
+            fi 
+        else 
+            changed=true
+        fi
+    else 
+        changed=true
+    fi
+    cp "$file" "../$backup_directory$i"
+done
+
+if [ "$changed" = false ]
+then 
+    rm -r "../$backup_directory$i"
+    echo "nothing to commit"
+    cd ../..
+    exit
+fi 
+
+cd ../
+
+echo "Committed as commit $i"
+
+# print to log
+if [ -f log.txt ]
+then 
+    echo "$i $message" | cat - 'log.txt' > "$temp_file" && mv "$temp_file" 'log.txt'
+else 
+    echo "$i $message" > log.txt
+fi
+
+cd ../ || exit 1

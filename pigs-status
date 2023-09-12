@@ -1,0 +1,166 @@
+#!/bin/dash
+
+if [ ! -d ".pig" ]
+then 
+    echo "pigs-status: error: pigs repository directory .pig not found" >&2
+    exit 1
+fi 
+
+cd .pig || exit 1
+
+# status for all files in repo
+backup_directory='.snapshot.'
+i=0
+if [ -d "$backup_directory$i" ]
+then 
+    while [ -d "$backup_directory$i" ]
+    do 
+        i=$((i + 1))
+    done 
+    i=$((i - 1))
+
+    cd $backup_directory$i || exit 1
+    [ "$(ls)" ] && for file in *
+    do 
+        fexists_index=false
+        fexists_working=false
+        frepo_index_same=false
+        frepo_working_same=false
+        findex_working_same=false
+
+        # check if file is in index and is the same
+        if [ -f "../index/$file" ]
+        then 
+            fexists_index=true
+            if diff "$file" "../index/$file" > /dev/null
+            then    
+                frepo_index_same=true
+            fi 
+        fi
+
+        # check if file is in working directory and is the same
+        if [ -f "../../$file" ]
+        then 
+            fexists_working=true
+            if diff "$file" "../../$file" > /dev/null
+            then    
+                frepo_working_same=true
+            fi 
+        fi
+
+        # check if file is the same in index and working directory
+        if [ "$fexists_index" = true ] && [ "$fexists_working" = true ]
+        then 
+            if diff "../index/$file" "../../$file" >/dev/null
+            then 
+                findex_working_same=true
+            fi
+        fi
+
+        if [ "$fexists_index" = false ] && [ "$fexists_working" = false ]
+        then 
+            echo "$file - file deleted, deleted from index" 
+        elif [ "$fexists_index" = true ] && [ "$fexists_working" = false ]
+        then 
+            echo "$file - file deleted"
+        elif [ "$frepo_working_same" = true ] && [ "$findex_working_same" = true ]
+        then    
+            echo "$file - same as repo"
+        elif [ "$frepo_index_same" = true ] && [ "$fexists_working" = true ] && [ "$findex_working_same" = false ]
+        then 
+            echo "$file - file changed, changes not staged for commit"
+        elif  [ "$frepo_index_same" = false ] && [ "$findex_working_same" = true ]
+        then 
+            echo "$file - file changed, changes staged for commit"
+        elif [ "$fexists_index" = true  ] && [ "$fexists_working" = true ] && [ "$frepo_index_same" = false ] && [ "$findex_working_same" = false ]
+        then 
+            echo "$file - file changed, different changes staged for commit"
+        fi     
+    done 
+    cd ../ || exit 1
+fi
+
+# status for all files in index but not repo
+if [ -d "index" ]
+then 
+    cd index || exit 1
+    [ "$(ls)" ] && for file in *
+    do 
+        # if in repo, continue
+        if [ -d "../$backup_directory$i" ] && [ -f "../$backup_directory$i/$file" ]
+        then 
+            continue;
+        fi
+
+        fexists_working=false
+        findex_working_same=false
+        findex_deleted=false
+        
+        # if file has deleted in name, remove deleted
+        check=$(echo "$file" | cut -d'-' -f2)
+        if [ "$check" = "deleted" ]
+        then 
+            file=$(echo "$file" | cut -d'-' -f1)
+            findex_deleted=true
+        fi
+
+        # check if file is in working directory and is the same
+        if [ -f "../../$file" ]
+        then 
+            fexists_working=true
+            if [ "$findex_deleted" = false ]
+            then 
+                if diff "$file" "../../$file" > /dev/null
+                then    
+                    findex_working_same=true
+                fi
+            fi 
+        fi
+
+        if [ "$findex_deleted" = true ] && [ "$fexists_working" = true ]
+        then 
+            if [ ! -f "../$backup_directory$i/$file" ]
+            then 
+                echo "$file - untracked"
+            else 
+                echo "$file - deleted from index"
+            fi
+        elif [ "$findex_deleted" = true ] && [ "$fexists_working" = false ]
+        then 
+            continue;
+        elif [ "$fexists_working" = false ]
+        then 
+            echo "$file - added to index, file deleted"
+        elif [ "$fexists_working" = true ] && [ "$findex_working_same" = false ]
+        then 
+            echo "$file - added to index, file changed"
+        elif [ "$fexists_working" = true ] && [ "$findex_working_same" = true ]
+        then 
+            echo "$file - added to index"
+        fi
+    done 
+    cd ../ || exit 1
+fi
+
+cd ../ || exit 1
+
+# status for files only in working directory
+[ "$(ls)" ] && for file in *
+do 
+    # if in repo, continue
+    if [ -d ".pig/$backup_directory$i" ] && [ -f ".pig/$backup_directory$i/$file" ]
+    then    
+        continue
+    fi
+    # if in index, continue
+    if [ -d ".pig/index" ]
+    then
+        if [ -f ".pig/index/$file" ] || [ -f ".pig/index/$file-deleted" ]
+        then 
+            continue
+        fi
+    fi
+
+    echo "$file - untracked"
+done
+

@@ -1,0 +1,58 @@
+#!/bin/dash
+
+if [ ! -d '.pig' ]
+then 
+    echo 'pigs-add: error: pigs repository directory .pig not found' >&2
+    exit 1
+fi 
+
+if [ $# -lt 1 ]
+then
+    echo "usage: pigs-add <filenames>" >&2
+    exit 1
+fi
+
+for file in "$@"
+do 
+    # if file doesn't exist in working directory print error
+    if  [ ! -f "$file" ]
+    then 
+        if [ -d ".pig/index" ]
+        then 
+            cd ".pig/index" || exit 1
+            if [ ! -f "$file" ]
+            then 
+                echo "pigs-add: error: can not open '$file'" >&2
+                exit 1
+            fi
+            cd "../.." || exit 1
+        else 
+            echo "pigs-add: error: can not open '$file'" >&2
+            exit 1
+        fi 
+    fi 
+
+    cd '.pig' || exit 1
+
+    if  [ ! -d "index" ]
+    then 
+        mkdir index
+    fi 
+
+    # copy file to index or add deleted file to index
+    if [ -f "../$file" ]
+    then 
+        cp "../$file" index 
+    else 
+        cd index || exit 1
+        if [ -f "$file" ]
+        then 
+            rm "$file"
+            touch "$file-deleted"
+        fi 
+        cd ../
+    fi 
+
+    cd ../ || exit 1
+done 
+

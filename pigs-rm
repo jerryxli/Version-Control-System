@@ -1,0 +1,105 @@
+#!/bin/dash
+
+if [ ! -d ".pig" ]
+then 
+    echo "pigs-rm: error: pigs repository directory .pig not found" >&2
+    exit 1
+fi 
+
+force=false
+cached=false
+
+if [ "$1" = '--force' ]
+then
+    force=true
+fi
+
+if [ "$1" = '--cached' ] || [ "$2" = '--cached' ]
+then
+    cached=true
+fi
+
+cd .pig || exit 1
+
+for file in "$@"
+do 
+    if [ "$file" = '--force' ] || [ "$file" = '--cached' ]
+    then 
+        continue
+    fi 
+
+    if [ ! -f "index/$file" ]
+    then 
+        echo "pigs-rm: error: '$file' is not in the pigs repository" >&2
+        exit 1
+    fi
+
+    # check if has staged changes in index - has not been committed 
+    backup_directory='.snapshot.'
+    i=0
+    if [ ! -d "$backup_directory$i" ]
+    then 
+        echo "pigs-rm: error: '$file' has staged changes in the index" >&2
+        exit 1
+    else 
+        while [ -d "$backup_directory$i" ]
+        do 
+            i=$((i + 1))
+        done 
+        i=$((i - 1))
+        if [ ! -f "$backup_directory$i/$file" ] 
+        then 
+            if [ "$cached" = false ] && [ "$force" = false ]
+            then
+                echo "pigs-rm: error: '$file' has staged changes in the index" >&2
+                exit 1
+            fi
+        else 
+            # check repo and working file
+            if ! diff "$backup_directory$i/$file" "../$file" >/dev/null 
+            then 
+                # check index and repo
+                if diff "index/$file" "$backup_directory$i/$file" >/dev/null 
+                then 
+                    if [ "$cached" = false ]
+                    then 
+                        echo "pigs-rm: error: '$file' in the repository is different to the working file" >&2
+                        exit 1
+                    fi
+                else 
+                    # check index and working file
+                    if diff "index/$file" "../$file" >/dev/null 
+                    then
+                        if [ "$cached" = false ] 
+                        then
+                            echo "pigs-rm: error: '$file' has staged changes in the index" >&2
+                            exit 1
+                        fi
+                    else 
+                        if [ "$force" = false ] 
+                        then 
+                            echo "pigs-rm: error: '$file' in index is different to both the working file and the repository" >&2
+                            exit 1
+                        fi
+                    fi 
+                fi  
+            fi 
+        fi 
+    fi 
+
+    # remove files
+    if [ "$cached" = true ] 
+    then 
+        cd index || exit 1
+        rm "$file"
+        touch "$file-deleted"
+    else
+        rm "../$file"
+        cd index || exit 1
+        rm "$file"
+        touch "$file-deleted"
+    fi
+    cd ../
+done
+
+cd ../

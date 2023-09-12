@@ -1,0 +1,50 @@
+#!/bin/dash
+
+if [ ! $# -eq 1 ]
+  then
+    echo "usage: pigs-show <commit>:<filename>"
+    exit 1
+fi
+
+if ! test -d ".pig"
+then 
+    echo "pigs-show: error: pigs repository directory .pig not found" >&2
+    exit 1
+fi 
+
+commit_no=$(echo "$1" | cut -d':' -f1)
+filename=$(echo "$1" | cut -d':' -f2)
+
+if [ -z "$commit_no" ]
+then 
+    cd ".pig/index" 2>/dev/null || echo "/n" | exit 1
+    if ! test -f "$filename"
+    then     
+        echo "pigs-show: error: '$filename' not found in index" >&2
+        exit 1
+    else 
+        cat "$filename"
+    fi
+    cd ../..
+else 
+    if ! test -d ".pig/.snapshot.$commit_no"
+    then 
+        echo "pigs-show: error: unknown commit '$commit_no'" >&2
+        exit 1
+    else 
+        cd ".pig/.snapshot.$commit_no" || exit 1
+    fi 
+
+    if ! test -f "$filename"
+    then     
+        echo "pigs-show: error: '$filename' not found in commit $commit_no" >&2
+        exit 1
+    else 
+        while IFS= read -r line
+        do 
+            echo "$line"
+        done < "$filename"
+    fi
+    cd ../..
+fi 
+

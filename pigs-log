@@ -1,0 +1,11 @@
+#!/bin/dash
+
+if ! test -d ".pig"
+then 
+    echo "pigs-status: error: pigs repository directory .pig not found" >&2
+    exit 1
+fi 
+
+cd .pig || exit 1
+cat log.txt
+cd ../ || exit 1
